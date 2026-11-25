@@ -22,6 +22,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
       - name: Fetch catalog
         env:
           RA_API_KEY: ${{ secrets.RA_API_KEY }}
@@ -35,7 +38,19 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           if [ -d data ]; then
             git add data
-            git diff --cached --quiet || (git commit -m 'Update RA catalog' && git push)
+            if ! git diff --cached --quiet; then
+              git commit -m 'Update RA catalog'
+            fi
+            for attempt in 1 2 3 4 5; do
+              git fetch origin main
+              git rebase origin/main || { git rebase --abort; exit 1; }
+              if git push origin HEAD:main; then
+                exit 0
+              fi
+              sleep $((attempt * 3))
+            done
+            echo 'Unable to push catalog after five attempts'
+            exit 1
           fi
       - uses: actions/configure-pages@v5
       - name: Prepare website
