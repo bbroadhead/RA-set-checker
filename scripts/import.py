@@ -28,5 +28,13 @@ for s in systems:
     print("Importing",s["Name"],flush=True)
     games=api("GetGameList",i=s["ID"],f=1,h=1)
     rows=[{k:g[k] for k in ("ID","Title","ImageIcon","NumAchievements","Hashes")} for g in games if g["NumAchievements"]>0]
+    # Mark additions relative to the previous successful console snapshot.
+    if path.exists():
+        previous = {g["ID"]:g for g in json.loads(path.read_text(encoding="utf-8"))}
+        for row in rows:
+            row["NewSet"] = row["ID"] not in previous
+    else:
+        for row in rows:
+            row["NewSet"] = False
     write(path,rows)
     time.sleep(5)
