@@ -1,0 +1,57 @@
+name: Import RA catalog and deploy
+on:
+  workflow_dispatch:
+    inputs:
+      console_id:
+        description: 'Console ID (blank imports all missing consoles sequentially)'
+        required: false
+        type: string
+      refresh:
+        description: 'Refresh existing console data'
+        type: boolean
+        default: false
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+concurrency:
+  group: ra-catalog
+  cancel-in-progress: false
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch catalog
+        env:
+          RA_API_KEY: ${{ secrets.RA_API_KEY }}
+          CONSOLE_ID: ${{ inputs.console_id }}
+          REFRESH: ${{ inputs.refresh }}
+        run: python3 scripts/import.py
+      - name: Commit catalog
+        if: always()
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if [ -d data ]; then
+            git add data
+            git diff --cached --quiet || (git commit -m 'Update RA catalog' && git push)
+          fi
+      - uses: actions/configure-pages@v5
+      - name: Prepare website
+        run: |
+          mkdir -p _site
+          cp index.html _site/
+          cp -r data _site/
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+  deploy:
+    needs: import
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/deploy-pages@v4
+        id: deployment
